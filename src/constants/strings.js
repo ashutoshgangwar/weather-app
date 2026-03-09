@@ -16,6 +16,7 @@ export const STRINGS = {
     windSpeed: "Wind Speed",
     pressure: "Pressure",
     noWeatherData: "No weather data available",
+    forecast5Days: "5-Day Forecast",
   },
   hi: {
     gettingWeather: "मौसम प्राप्त किया जा रहा है...",
@@ -31,5 +32,6 @@ export const STRINGS = {
     windSpeed: "पवन गति",
     pressure: "दबाव",
     noWeatherData: "मौसम डेटा उपलब्ध नहीं है",
+    forecast5Days: "5-दिन का पूर्वानुमान",
   },
 };

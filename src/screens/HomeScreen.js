@@ -14,8 +14,11 @@ import {
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 import { STRINGS } from "../constants/strings";
 
+import ForecastList from "../components/ForecastList";
 import WeatherCard from "../components/WeatherCard";
 import {
+  getForecastByCity,
+  getForecastByCoords,
   getLocationSuggestions,
   getWeatherByCity,
   getWeatherByCoords,
@@ -23,6 +26,7 @@ import {
 
 export default function HomeScreen() {
   const [weather, setWeather] = useState(null);
+  const [forecast, setForecast] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -31,6 +35,44 @@ export default function HomeScreen() {
   const [lang, setLang] = useState("en");
 
   const t = (key) => STRINGS[lang][key] || key;
+
+  const normalizeForecast = (forecastData) => {
+    if (!forecastData?.list?.length) return [];
+
+    const grouped = forecastData.list.reduce((acc, item) => {
+      const dateKey = (item.dt_txt || "").split(" ")[0];
+      if (!dateKey) return acc;
+      if (!acc[dateKey]) acc[dateKey] = [];
+      acc[dateKey].push(item);
+      return acc;
+    }, {});
+
+    return Object.keys(grouped)
+      .slice(0, 5)
+      .map((date) => {
+        const items = grouped[date];
+        const tempsMin = items.map(
+          (entry) => entry.main.temp_min ?? entry.main.temp,
+        );
+        const tempsMax = items.map(
+          (entry) => entry.main.temp_max ?? entry.main.temp,
+        );
+        const min = Math.min(...tempsMin);
+        const max = Math.max(...tempsMax);
+        const midday = items.find((entry) =>
+          entry.dt_txt?.includes("12:00:00"),
+        );
+        const pick = midday || items[Math.floor(items.length / 2)];
+
+        return {
+          date,
+          min,
+          max,
+          icon: pick?.weather?.[0]?.main || "Clear",
+          description: pick?.weather?.[0]?.description || "",
+        };
+      });
+  };
 
   // suggestions debounce
   useEffect(() => {
@@ -71,7 +113,18 @@ export default function HomeScreen() {
         location.coords.longitude,
       );
 
+      console.log("[API] current weather (coords)", data);
       setWeather(data);
+      try {
+        const forecastData = await getForecastByCoords(
+          location.coords.latitude,
+          location.coords.longitude,
+        );
+        console.log("[API] forecast (coords)", forecastData);
+        setForecast(normalizeForecast(forecastData));
+      } catch {
+        setForecast([]);
+      }
     } catch (err) {
       setError(err.message || "Failed to fetch weather");
     } finally {
@@ -88,8 +141,16 @@ export default function HomeScreen() {
 
     try {
       const data = await getWeatherByCity(searchQuery.trim());
+      console.log("[API] current weather (city)", data);
       setWeather(data);
       setSuggestions([]);
+      try {
+        const forecastData = await getForecastByCity(searchQuery.trim());
+        console.log("[API] forecast (city)", forecastData);
+        setForecast(normalizeForecast(forecastData));
+      } catch {
+        setForecast([]);
+      }
     } catch (err) {
       setError(err.message || "City not found");
     } finally {
@@ -131,7 +192,7 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Top bar with refresh icon and language toggle */}
+      {/* Top bar with language toggle (left) and refresh (right) */}
       <View
         style={{
           flexDirection: "row",
@@ -141,14 +202,6 @@ export default function HomeScreen() {
           marginTop: verticalScale(5),
         }}
       >
-        {/* Refresh icon button */}
-        <TouchableOpacity
-          onPress={fetchWeatherByLocation}
-          style={{ padding: 8 }}
-          accessibilityLabel="Refresh current location weather"
-        >
-          <MaterialIcons name="refresh" size={28} color="#007AFF" />
-        </TouchableOpacity>
         {/* Language toggle */}
         <View style={{ flexDirection: "row" }}>
           <TouchableOpacity
@@ -184,6 +237,14 @@ export default function HomeScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+        {/* Refresh icon button */}
+        <TouchableOpacity
+          onPress={fetchWeatherByLocation}
+          style={{ padding: 8 }}
+          accessibilityLabel="Refresh current location weather"
+        >
+          <MaterialIcons name="refresh" size={28} color="#007AFF" />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.searchContainerWrapper}>
@@ -240,13 +301,9 @@ export default function HomeScreen() {
         contentContainerStyle={styles.contentContainer}
       >
         {weather && <WeatherCard weather={weather} lang={lang} />}
-
-        <TouchableOpacity
-          style={styles.button}
-          onPress={fetchWeatherByLocation}
-        >
-          <Text style={styles.buttonText}>{t("useCurrentLocation")}</Text>
-        </TouchableOpacity>
+        {forecast.length > 0 && (
+          <ForecastList forecast={forecast} lang={lang} />
+        )}
       </ScrollView>
     </View>
   );
